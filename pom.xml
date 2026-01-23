@@ -90,23 +90,6 @@
                 <artifactId>icu4j</artifactId>
                 <version>73.2</version>
             </dependency>
-
-            <!-- 内部模块依赖 - 用于管理内部模块的版本 -->
-            <!-- <dependency>
-                <groupId>com.ecat</groupId>
-                <artifactId>ecat-core</artifactId>
-                <version>1.0.0</version>
-            </dependency>
-            <dependency>
-                <groupId>com.ecat</groupId>
-                <artifactId>integration-ecat-common</artifactId>
-                <version>1.0.0</version>
-            </dependency>
-            <dependency>
-                <groupId>com.ecat</groupId>
-                <artifactId>integration-serial</artifactId>
-                <version>1.1.0</version>
-            </dependency> -->
         </dependencies>
     </dependencyManagement>
 
@@ -141,6 +124,14 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <repositories>
         <repository>
