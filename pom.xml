@@ -6,7 +6,7 @@
 
     <groupId>com.ecat</groupId>
     <artifactId>ecat-project</artifactId>
-    <version>1.0.0</version>
+    <version>3.0.0</version>
     <packaging>pom</packaging>
 
     <name>ecat-project</name>
