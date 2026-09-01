@@ -114,6 +114,10 @@
                         <includes>
                             <include>**/*Test.java</include>
                         </includes>
+                        <!-- 固定测试类执行顺序为字典序：默认 filesystem 枚举序随平台(NTFS/ext4/APFS)漂移，
+                             使顺序依赖缺陷在不同机器上"随机"发病且无法交叉复现；全局定序后此类问题在
+                             所有平台一致暴露（2026-08-31 ecat-core 顺序依赖、2026-09-01 tcp 域池毒化同族病） -->
+                        <runOrder>alphabetical</runOrder>
                     </configuration>
                 </plugin>
                 <plugin>
