@@ -6,7 +6,7 @@
 
     <groupId>com.ecat</groupId>
     <artifactId>ecat-project</artifactId>
-    <version>3.0.0</version>
+    <version>4.0.0</version>
     <packaging>pom</packaging>
 
     <name>ecat-project</name>
@@ -22,6 +22,8 @@
         <fastjson2.version>2.0.53</fastjson2.version>
         <logback.version>1.2.13</logback.version>
         <snakeyaml.version>2.2</snakeyaml.version>
+        <jackson.version>2.12.5</jackson.version>
+        <jmdns.version>3.5.9</jmdns.version>
     </properties>
 
     <dependencyManagement>
@@ -90,6 +92,60 @@
                 <artifactId>icu4j</artifactId>
                 <version>73.2</version>
             </dependency>
+
+            <!-- jackson-databind:统一 2.12.5(取 ecat-common 与 ruoyi 现行同值,不趁机升级)。
+                 运行层经 integration-ecat-common fatjar 进 lib/ 供全进程扁平类加载层对齐,
+                 解决 docker-java 传递的 2.10.3 与 Ruoyi/Spring Boot 2.x 所用 2.12.x 的版本冲突 -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <!-- jackson-annotations/jackson-core:随 databind 2.12.5 家族同值 pin。databind pin 落地后
+                 docker-java 树(2.10.3)与 boot 2.5.15 BOM(2.12.7)路径与之形成图内多版本;
+                 2.12.5=改动前 mediation 赢家(ruoyi-system 先声明同深度先赢)且为卡定 databind 自身配对值,
+                 pin 即固化现状,非升级 -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <!-- jmdns:zeroconf/test-discovery 两仓同值 3.5.9 单源化 -->
+            <dependency>
+                <groupId>org.jmdns</groupId>
+                <artifactId>jmdns</artifactId>
+                <version>${jmdns.version}</version>
+            </dependency>
+            <!-- 以下三条为全仓依赖图多路径冲突的赢家固版(把 mediation 已实际生效的版本显式化为
+                 单源 pin,运行时行为零变化):slf4j-api 1.7.32=ecat-core 经 logback 1.2.13 的树值;
+                 扁平类加载层 core 层恒先加载(core 版本恒赢),此 pin 即固化运行时现实 -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>1.7.32</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jboss.logging</groupId>
+                <artifactId>jboss-logging</artifactId>
+                <version>3.4.1.Final</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bytedeco</groupId>
+                <artifactId>javacpp</artifactId>
+                <version>1.5.13</version>
+            </dependency>
+            <!-- guava:冲突 artifact 在 ecat-core 树内(mapdb 传递 33.7.2-jre),pin=core 树值;
+                 docker-java 树的 19.0 在扁平类加载层 core 恒先加载下为死重,固化运行时现实 -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.7.2-jre</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -127,6 +183,50 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+
+        <!-- 构建门禁:本地 mvnd 与云端 mvn 同一 pom 同源执法;执法点=validate(编译前最快失败) -->
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.6.3</version>
+                <executions>
+                    <execution>
+                        <id>enforce-build-gates</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <!-- 依赖图模块内收敛。官方默认排除 provided/test 两个 scope,而 ecat-core 在
+                                     全部集成仓是 provided——默认配置下 core 版本收敛零执法;收窄排除集到
+                                     test,使 provided(含 ecat-core 整棵传递树)纳入收敛检查 -->
+                                <dependencyConvergence>
+                                    <excludedScopes>
+                                        <scope>test</scope>
+                                    </excludedScopes>
+                                    <!-- 豁免登记(ruoyi 宿主栈 provided 域 spring 旧多版):org.springframework(.boot) 全族。
+                                         存量多版本(5.3.19/5.3.20/5.3.27/5.3.39 + boot 2.5.15/2.7.12),
+                                         宿主运行时自供、不进集成 jar fatjar lib/,不属集成 jar 收敛门执法面;
+                                         清除条件=宿主 spring 栈统一治理卡落地。只减不增纪律 -->
+                                    <excludes>
+                                        <exclude>org.springframework:*</exclude>
+                                        <exclude>org.springframework.boot:*</exclude>
+                                    </excludes>
+                                </dependencyConvergence>
+                                <requireJavaVersion>
+                                    <version>[1.8,)</version>
+                                </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.6.3,)</version>
+                                </requireMavenVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
     <licenses>
