@@ -195,7 +195,9 @@
                      基线收集窗用 -Decat.japicmp.skip=true 跳过;封版后禁止带 flag 构建(产物不得发布)。
                      @Deprecated 豁免=D16 弃用窗执法(实测语义,§1.3-E4 轮2 矩阵):弃用后移除=豁免(patch 可)、
                      双端已弃用元素变更=豁免、未弃用移除=必须升 major。
-                     宣告弃用(无→有注解)=MAJOR 级(排除丢新侧→幻影 REMOVED),即弃用宣告实际成本=升 major,§9-Q4 待拍。
+                     宣告弃用(无→有注解)=免费提醒(D62 改档,2026-10-04:原「宣告=升 major」计费表述作废;
+                     门禁比对排除弃用项=弃用期不算破坏,消费者保留迁移期;真正移除/改签名才计 MAJOR 拦人;
+                     不改门不加后处理脚本,业界通行语义;M1 样本不依赖弃用形态)。
                      嵌套 lib/ 三方 jar 不参与对比(japicmp 只读 jar 根),三方冲突执法归 classpath 审计(T-6-5)。 -->
                 <plugin>
                     <groupId>com.github.siom79.japicmp</groupId>
@@ -287,9 +289,10 @@
                  切换=载体替换,脚本逻辑/格式/白名单常量逐字平移,RED 契约由 gmavenplus 忽略返回值改抛异常表达)。
                  ①flyway 裸 import 白名单 ②SQL 路径规范 ③db 约定块缺声明(strict 属性翻转升红)。
                  RED=抛错构建失败([ERROR]+明细行);WARN=放行但明细可见;绿跑零输出零落盘。
-                 报告双通道:stdout+target/ecat-lint-report.txt。
+                 报告双通道:stdout+target/ecat-lint-report.txt(通道语义=每查覆盖写同一文件,stdout=多查 WARN 全集通道)。
                  白名单内联各脚本常量区,增删必须走本仓 commit 留痕,子仓重声明整段插件才可改(篡改 git 可见)。
-                 第四查 requires_core 对齐(T-6-6)后续同位增 execution,序=④ -->
+                 第四查 requires_core 对齐(T-6-6)=第 4 execution(设计轮3:载体同步 gmavenplus 现值,RED 契约=throw 同族;
+                 触发面=非 pom 打包模块;时限白名单条目见查④脚本常量区,清理条件随行尾注释) -->
             <plugin>
                 <groupId>org.codehaus.gmavenplus</groupId>
                 <artifactId>gmavenplus-plugin</artifactId>
@@ -536,6 +539,159 @@ boolean dbDirHasMigration(dbDir) {
     }
     return false;
 }
+
+void emitReport(lines, checkId, red, warn) {
+    for (def i = 0; i < lines.size(); i = i + 1) { System.out.println(lines.get(i)); }
+    def summary = "[ECAT-LINT][摘要] artifactId=" + project.getArtifactId() + " RED=" + red + " WARN=" + warn;
+    System.out.println(summary);
+    def w = null;
+    try {
+        def reportFile = new java.io.File(project.getBuild().getDirectory(), "ecat-lint-report.txt");
+        reportFile.getParentFile().mkdirs();   // validate 期 target/ 尚未物化(首跑实证),不建目录则 FileWriter 必炸
+        w = new java.io.BufferedWriter(new java.io.FileWriter(reportFile));
+        for (def j = 0; j < lines.size(); j = j + 1) { w.write(lines.get(j)); w.newLine(); }
+        w.write(summary); w.newLine();
+    } finally {
+        if (w != null) { try { w.close(); } catch (java.io.IOException e) { } }
+    }
+}]]></script></scripts>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>ecat-lint-t6-6-requires-core</id>
+                        <phase>validate</phase>
+                        <goals><goal>execute</goal></goals>
+                        <configuration>
+                            <scripts><script><![CDATA[/* T-6-6 查④:requires_core 构建期对齐(D26 P3-4)。
+   场景与为什么:重刻刷版本(片7)只刷 pom 不刷 config(或反向)的仓,运行时 boot 门
+   才拒载(片3 T-3-2)——问题暴露在设备上;本门在构建期查同一份两源声明的一致性,
+   「两源都有值时的一致性」归构建期,缺失侧归片3 运行时(卡分工)。判定器反射绑定
+   core VersionRange=与运行时门同一实现,零第二语义。RED 契约=抛异常(gmavenplus
+   忽略脚本返回值,同查①②③)。 */
+
+selfId = project.getArtifactId();
+
+// ---- 过渡白名单:每元素一个 artifactId,整仓豁免;行尾注释=理由+清理条件,只减不增 ----
+whitelist = new String[] {
+    "integration-ecat-db-migration",  // T-5-1 新纪元仓:requires_core=^4.0.0(拍板)对 pom 现值 3.1.0 的片7 前过渡;片7 重刻落地后移除,只减不增(2026-10-04 lead 裁案A;运行时装载语义不变,core 3.x 仍恒红拒载)
+};
+for (def i = 0; i < whitelist.length; i = i + 1) {
+    if (whitelist[i].equals(selfId)) { return; }   // 白名单仓整查豁免
+}
+
+if ("pom".equals(project.getPackaging())) { return; }   // 触发面谓词:pom 打包模块(父/聚合)非集成件,永不入运行时门管辖,不发假 WARN(同查③触发面模式;lead 裁 2026-10-04;99 子仓全 jar 实证零执法损失)
+
+cfg = new java.io.File(project.getBasedir(), "src/main/resources/ecat-config.yml");
+if (!cfg.isFile()) {   // W1:config 缺失侧
+    warnLines = new java.util.ArrayList();
+    warnLines.add("[ECAT-LINT][T6-6][WARN] " + selfId
+        + " | ecat-config.yml 缺失 | 缺失方归片3 T-3-2 运行时门,构建期不执法");
+    emitReport(warnLines, "T6-6", 0, 1);
+    return;
+}
+
+// ---- 源②:requires_core 行语法提取(注释行跳过;>1 行命中=声明歧义红,禁猜取哪行) ----
+constraint = null; lineNo = 0; hitCount = 0;
+br = null;
+try {
+    br = new java.io.BufferedReader(new java.io.FileReader(cfg));
+    line = br.readLine(); ln = 0;
+    while (line != null) {
+        ln = ln + 1;
+        if (!line.trim().startsWith("#")) {
+            m = java.util.regex.Pattern.compile('^requires_core\\s*:\\s*(.+?)\\s*$').matcher(line);   // 单引号=groovy 纯 String(双引号是 GString,$" 非法插值,词法即炸)
+            if (m.find()) { hitCount = hitCount + 1; constraint = m.group(1); lineNo = ln; }
+        }
+        line = br.readLine();
+    }
+} finally {
+    if (br != null) { try { br.close(); } catch (java.io.IOException e) { } }
+}
+if (hitCount == 0) {   // W1:约束缺失侧
+    warnLines = new java.util.ArrayList();
+    warnLines.add("[ECAT-LINT][T6-6][WARN] " + selfId
+        + " | src/main/resources/ecat-config.yml | 缺 requires_core 声明 | 缺失方归片3 T-3-2 运行时门,构建期不执法");
+    emitReport(warnLines, "T6-6", 0, 1);
+    return;
+}
+if (hitCount > 1) {    // R1:声明歧义
+    redLines = new java.util.ArrayList();
+    redLines.add("[ECAT-LINT][T6-6][RED] " + selfId
+        + " | src/main/resources/ecat-config.yml:" + lineNo
+        + " | requires_core 声明歧义(命中 " + hitCount + " 行,禁猜取哪行)");
+    emitReport(redLines, "T6-6", 1, 0);
+    throw new Exception("[ECAT-LINT][T6-6] 构建判失败:requires_core 声明歧义,明细见上方行与 target/ecat-lint-report.txt");
+}
+if (constraint.startsWith("\"") && constraint.endsWith("\"") && constraint.length() >= 2) {
+    constraint = constraint.substring(1, constraint.length() - 1);   // 剥成对双引号(container 形态)
+}
+
+// ---- 源①:解析后 ecat-core 版本(Maven 已消解字面量/属性/depMgmt 的编译真值) ----
+coreArt = null;
+arts = project.getArtifacts();
+artIt = arts.iterator();
+while (artIt.hasNext()) {
+    a = artIt.next();
+    if ("ecat-core".equals(a.getArtifactId())) { coreArt = a; }
+}
+if (coreArt == null) {   // W2:pom 无 core 依赖侧
+    warnLines = new java.util.ArrayList();
+    warnLines.add("[ECAT-LINT][T6-6][WARN] " + selfId
+        + " | pom 无 ecat-core 依赖 | 缺失方归片3 T-3-2 运行时门,构建期不执法");
+    emitReport(warnLines, "T6-6", 0, 1);
+    return;
+}
+coreVersion = coreArt.getVersion();
+
+// ---- 判定:反射桥(独立 URLClassLoader 不经插件 classpath=自举成立条件;
+//      invoke 包装语义:目标异常必被 InvocationTargetException 包装,getCause() 解包后分流,
+//      直接 catch IllegalArgumentException=死分支) ----
+try {
+    loader = new java.net.URLClassLoader(new java.net.URL[] { coreArt.getFile().toURI().toURL() }, (java.lang.ClassLoader) null);   // cast 消歧(URLClassLoader 双重载,groovy 对 null 字面量动态分派选不了)
+    clsV = Class.forName("com.ecat.core.Version.Version", true, loader);
+    clsR = Class.forName("com.ecat.core.Version.VersionRange", true, loader);
+    version = clsV.getMethod("parse", new Class[] { String.class }).invoke(null, new Object[] { coreVersion });
+    range   = clsR.getMethod("parse", new Class[] { String.class }).invoke(null, new Object[] { constraint });
+    ok = (Boolean) clsR.getMethod("satisfies", new Class[] { clsV }).invoke(range, new Object[] { version });
+} catch (java.lang.ClassNotFoundException cnfe) {   // R5:桥绑定面漂移
+    redLines = new java.util.ArrayList();
+    redLines.add("[ECAT-LINT][T6-6][RED] " + selfId + " | 桥绑定面漂移:core 类不可达("
+        + cnfe.getMessage() + ") | 修复=核对绑定三签名 Version.parse/VersionRange.parse/VersionRange.satisfies(core 版本变更/归一改签名时改桥三行)");
+    emitReport(redLines, "T6-6", 1, 0);
+    throw new Exception("[ECAT-LINT][T6-6] 构建判失败:桥绑定面漂移,core 类不可达,明细见上方行与 target/ecat-lint-report.txt");
+} catch (java.lang.reflect.InvocationTargetException ite) {
+    cause = ite.getCause();   // invoke 包装语义:目标异常在此,解包后分流
+    if (cause instanceof IllegalArgumentException) {   // R3:Version/VersionRange parse 的非法输入
+        redLines = new java.util.ArrayList();
+        redLines.add("[ECAT-LINT][T6-6][RED] " + selfId + " | 约束/版本解析失败:"
+            + cause.getMessage() + "(经 invoke 解包;与片3 运行时门同口径:解析不了=明确失败)");
+        emitReport(redLines, "T6-6", 1, 0);
+        throw new Exception("[ECAT-LINT][T6-6] 构建判失败:约束/版本解析失败,明细见上方行与 target/ecat-lint-report.txt");
+    }
+    redLines = new java.util.ArrayList();   // R6:非预期目标异常,照样红+带诊断,不吞
+    redLines.add("[ECAT-LINT][T6-6][RED] " + selfId + " | 反射调用目标异常:"
+        + cause.getClass().getName() + ":" + cause.getMessage());
+    emitReport(redLines, "T6-6", 1, 0);
+    throw new Exception("[ECAT-LINT][T6-6] 构建判失败:反射调用目标异常,明细见上方行与 target/ecat-lint-report.txt");
+}
+
+if (ok.booleanValue()) { return; }   // G
+
+redLines = new java.util.ArrayList();   // R2:不满足
+redLines.add("[ECAT-LINT][T6-6][RED] " + selfId + " | pom-ecat-core=" + coreVersion
+    + " vs requires_core=" + constraint + "(src/main/resources/ecat-config.yml:" + lineNo + ") | 不满足("
+    + semanticsOf(constraint) + ") | 修复=两源同步(重刻期=片7 归一清单动作;日常=提版本或改约束,二者取真实意图)");
+emitReport(redLines, "T6-6", 1, 0);
+throw new Exception("[ECAT-LINT][T6-6] 构建判失败:pom-ecat-core 版本不满足 requires_core 约束,明细见上方行与 target/ecat-lint-report.txt");
+
+// ---- 方法区(无类型签名;emitReport 逐字同查①②③现值;semanticsOf 仅拼人话,判定唯一来源=VersionRange 返回值,两处不得互串) ----
+String semanticsOf(c) {   // ^/~ 形态机械展开区间,人话辅助不参与判定
+    if (c.startsWith("^")) { def b = c.substring(1); return "[>=" + b + ",<" + nextMajor(b) + ")"; }
+    if (c.startsWith("~")) { def b = c.substring(1); return "[>=" + b + ",<" + nextMinor(b) + ")"; }
+    return c;
+}
+String nextMajor(b) { def parts = b.split("\\."); return (Integer.parseInt(parts[0]) + 1) + ".0.0"; }
+String nextMinor(b) { def parts = b.split("\\."); return parts[0] + "." + (Integer.parseInt(parts[1]) + 1) + ".0"; }
 
 void emitReport(lines, checkId, red, warn) {
     for (def i = 0; i < lines.size(); i = i + 1) { System.out.println(lines.get(i)); }
