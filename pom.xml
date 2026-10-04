@@ -24,6 +24,10 @@
         <snakeyaml.version>2.2</snakeyaml.version>
         <jackson.version>2.12.5</jackson.version>
         <jmdns.version>3.5.9</jmdns.version>
+        <!-- japicmp skip 属性(门禁总开关,配置块见 pluginManagement):仅基线收集窗(全员 4.0.0 发布前,
+             CLI 全量传递)与登记过的运维逃生合法;CLI -Decat.japicmp.skip=true 按次覆写不落盘,
+             仓级 pom 永久覆写=豁免须登记 -->
+        <ecat.japicmp.skip>false</ecat.japicmp.skip>
     </properties>
 
     <dependencyManagement>
@@ -181,6 +185,54 @@
                     <artifactId>maven-assembly-plugin</artifactId>
                     <version>3.6.0</version>
                 </plugin>
+                <!-- japicmp API 兼容门禁(T-6-3):任何仓 API 表面变化必须与版本号互相执法——
+                     MAJOR 级破坏必须升 major、MINOR 级必须升 minor,否则构建红。
+                     基线=「严格小于当前版本的最高非 SNAPSHOT release」(本地 m2+远端通道合并解析,本地遮蔽远端,等版本不做基线)。
+                     ignoreMissingOldVersion 必须显式 false:0.26.2 缺省行为是缺基线仅警告跳过(fail-open),显式 false 才缺基线即红(fail-closed)。
+                     基线收集窗用 -Decat.japicmp.skip=true 跳过;封版后禁止带 flag 构建(产物不得发布)。
+                     @Deprecated 豁免=D16 弃用窗执法(实测语义,§1.3-E4 轮2 矩阵):弃用后移除=豁免(patch 可)、
+                     双端已弃用元素变更=豁免、未弃用移除=必须升 major。
+                     宣告弃用(无→有注解)=MAJOR 级(排除丢新侧→幻影 REMOVED),即弃用宣告实际成本=升 major,§9-Q4 待拍。
+                     嵌套 lib/ 三方 jar 不参与对比(japicmp 只读 jar 根),三方冲突执法归 classpath 审计(T-6-5)。 -->
+                <plugin>
+                    <groupId>com.github.siom79.japicmp</groupId>
+                    <artifactId>japicmp-maven-plugin</artifactId>
+                    <version>0.26.2</version>
+                    <configuration>
+                        <skip>${ecat.japicmp.skip}</skip>
+                        <parameter>
+                            <!-- API 面=public+protected(库形态 API 语义;protected 嵌套类/成员是继承扩展面) -->
+                            <accessModifier>protected</accessModifier>
+                            <!-- 报告只输出有变化的类,降噪控时 -->
+                            <onlyModified>true</onlyModified>
+                            <!-- 必须为 false:@Deprecated 豁免依赖注解读取(E4) -->
+                            <noAnnotations>false</noAnnotations>
+                            <!-- 不分析合成成员(桥方法等),降噪 -->
+                            <includeSynthetic>false</includeSynthetic>
+                            <!-- 缺基线=红(实测 E2;勿删,删了变警告跳过) -->
+                            <ignoreMissingOldVersion>false</ignoreMissingOldVersion>
+                            <!-- @Deprecated 整体豁免(注解白名单,匹配新旧两侧元素,E4) -->
+                            <excludes>
+                                <exclude>@java.lang.Deprecated</exclude>
+                            </excludes>
+                            <!-- 被豁免元素的移除若殃及未豁免元素仍红,堵豁免漏洞 -->
+                            <breakBuildIfCausedByExclusion>true</breakBuildIfCausedByExclusion>
+                            <!-- 核心执法:变更级别 semver 判定(实测 E3) -->
+                            <breakBuildBasedOnSemanticVersioning>true</breakBuildBasedOnSemanticVersioning>
+                            <!-- 0.x 版本不享受放宽(全仓现无 0.x 线;显式 false 防意外放宽) -->
+                            <breakBuildBasedOnSemanticVersioningForMajorVersionZero>false</breakBuildBasedOnSemanticVersioningForMajorVersionZero>
+                        </parameter>
+                        <!-- html 报告无消费方;diff/md/xml 三件保留(归因证据,E11) -->
+                        <skipHtmlReport>true</skipHtmlReport>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>ecat-api-compat-gate</id>
+                            <phase>verify</phase>
+                            <goals><goal>cmp</goal></goals>
+                        </execution>
+                    </executions>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -225,6 +277,12 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <!-- japicmp 门禁引用项:无配置,继承 pluginManagement 完整块,全体子仓默认启用;
+                 本仓 packaging=pom 由插件 skipPomModules 原生跳过 -->
+            <plugin>
+                <groupId>com.github.siom79.japicmp</groupId>
+                <artifactId>japicmp-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>
