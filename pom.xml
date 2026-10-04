@@ -176,6 +176,13 @@
                     <configuration>
                         <includes>
                             <include>**/*Test.java</include>
+                            <!-- *IT 纳入收集(2026-10-04 surefire 默认 includes 漏 *IT 事故):
+                                 默认 includes 永不收集 *IT 类,Assume 门控的 IT 零收集、零 skip
+                                 计数、类名不出现=测试面静默缩水(「mvn test 绿了」误判 IT 已覆盖)。
+                                 纳入后常规构建对 IT 计 skipped(与 IT 类 Assume 门控设计原文一致),
+                                 显式 -Dtest=<ClassName>+门参数才真跑。配套纪律:新增 *IT 类必须
+                                 带 Assume 门控,否则常规构建会真跑(拖慢/环境依赖误红) -->
+                            <include>**/*IT.java</include>
                         </includes>
                         <!-- 固定测试类执行顺序为字典序：默认 filesystem 枚举序随平台(NTFS/ext4/APFS)漂移，
                              使顺序依赖缺陷在不同机器上"随机"发病且无法交叉复现；全局定序后此类问题在
@@ -292,7 +299,10 @@
                  报告双通道:stdout+target/ecat-lint-report.txt(通道语义=每查覆盖写同一文件,stdout=多查 WARN 全集通道)。
                  白名单内联各脚本常量区,增删必须走本仓 commit 留痕,子仓重声明整段插件才可改(篡改 git 可见)。
                  第四查 requires_core 对齐(T-6-6)=第 4 execution(设计轮3:载体同步 gmavenplus 现值,RED 契约=throw 同族;
-                 触发面=非 pom 打包模块;时限白名单条目见查④脚本常量区,清理条件随行尾注释) -->
+                 触发面=非 pom 打包模块;时限白名单条目见查④脚本常量区,清理条件随行尾注释)。
+                 第 5 查 API 兼容门窗态显式分离(D63③,2026-10-04)=第 5 execution:非 RED 查,japicmp skip 窗态
+                 (skip=true)发 [ECAT-GATE][WINDOW] 醒目横幅(WARN 级放行,报告双通道同族),消灭「绿构建+门未执法」
+                 静默态;skip 非 true 零输出零落盘。门态三态口径见该脚本头注 -->
             <plugin>
                 <groupId>org.codehaus.gmavenplus</groupId>
                 <artifactId>gmavenplus-plugin</artifactId>
@@ -693,6 +703,54 @@ String semanticsOf(c) {   // ^/~ 形态机械展开区间,人话辅助不参与�
 String nextMajor(b) { def parts = b.split("\\."); return (Integer.parseInt(parts[0]) + 1) + ".0.0"; }
 String nextMinor(b) { def parts = b.split("\\."); return parts[0] + "." + (Integer.parseInt(parts[1]) + 1) + ".0"; }
 
+void emitReport(lines, checkId, red, warn) {
+    for (def i = 0; i < lines.size(); i = i + 1) { System.out.println(lines.get(i)); }
+    def summary = "[ECAT-LINT][摘要] artifactId=" + project.getArtifactId() + " RED=" + red + " WARN=" + warn;
+    System.out.println(summary);
+    def w = null;
+    try {
+        def reportFile = new java.io.File(project.getBuild().getDirectory(), "ecat-lint-report.txt");
+        reportFile.getParentFile().mkdirs();   // validate 期 target/ 尚未物化(首跑实证),不建目录则 FileWriter 必炸
+        w = new java.io.BufferedWriter(new java.io.FileWriter(reportFile));
+        for (def j = 0; j < lines.size(); j = j + 1) { w.write(lines.get(j)); w.newLine(); }
+        w.write(summary); w.newLine();
+    } finally {
+        if (w != null) { try { w.close(); } catch (java.io.IOException e) { } }
+    }
+}]]></script></scripts>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>ecat-lint-d63-gate-window</id>
+                        <phase>validate</phase>
+                        <goals><goal>execute</goal></goals>
+                        <configuration>
+                            <scripts><script><![CDATA[/* 查⑤:API 兼容门(japicmp)窗态显式分离(2026-10-04 D63③,japicmp 基线缺口可本地半边)。
+   场景与为什么:门 skip 窗态(-Decat.japicmp.skip=true,基线收集窗/登记逃生合法)在插件侧
+   只有一行 [INFO] japicmp skipped.,绿构建不带任何「门未执法」醒目标记——消费方以
+   BUILD SUCCESS 为据会误读成门通过(T-1-5 同窗实证:skip 完成 install,门态只能靠
+   人读交单报告自觉披露)。本查把门态三态在报告面显式分离:
+   ①真比对=日志见 japicmp:cmp 执行+target/japicmp/ 报告三件(diff/md/xml);
+   ②基线解析失败=[ERROR] Could not find previous version=构建红(fail-closed,
+     ignoreMissingOldVersion=false 有牙,勿与 skip 混淆、勿删);
+   ③skip 窗态=本查横幅(唯一曾静默的态,消灭之):放行不拦构建,但 [ECAT-GATE][WINDOW]
+   醒目横幅+报告双通道,归因证据不得引用本构建为门绿。
+   GREEN 契约=skip 非 true 时零输出零落盘(同查①②③绿跑纪律)。 */
+
+skipVal = session.getUserProperties().getProperty("ecat.japicmp.skip");   // CLI -D 域(窗态 flag 实际落点)
+if (skipVal == null) { skipVal = session.getSystemProperties().getProperty("ecat.japicmp.skip"); }   // CLI 预留集落点
+if (skipVal == null) { skipVal = project.getProperties().getProperty("ecat.japicmp.skip"); }         // pom <properties> 域(字面量/profile)
+if (!"true".equals(skipVal)) { return; }   // 非窗态:零输出零落盘
+
+lines = new java.util.ArrayList();
+lines.add("[ECAT-GATE][WINDOW][WARN] " + project.getArtifactId()
+    + " | API 兼容门(japicmp)本构建 skip=true:零执法,BUILD SUCCESS≠门通过");
+lines.add("[ECAT-GATE][WINDOW] 门态判定口径:真比对=日志 japicmp:cmp 执行+target/japicmp/ 报告三件;"
+    + "基线解析失败=[ERROR] Could not find previous version=构建红(fail-closed,非 skip);"
+    + "本构建=skip 窗态(基线收集窗/登记逃生),API 兼容零执法");
+emitReport(lines, "GATE-WINDOW", 0, 1);
+
+// ---- 方法区(无类型签名;emitReport 逐字同查①②③④现值) ----
 void emitReport(lines, checkId, red, warn) {
     for (def i = 0; i < lines.size(); i = i + 1) { System.out.println(lines.get(i)); }
     def summary = "[ECAT-LINT][摘要] artifactId=" + project.getArtifactId() + " RED=" + red + " WARN=" + warn;
