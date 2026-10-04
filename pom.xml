@@ -28,6 +28,9 @@
              CLI 全量传递)与登记过的运维逃生合法;CLI -Decat.japicmp.skip=true 按次覆写不落盘,
              仓级 pom 永久覆写=豁免须登记 -->
         <ecat.japicmp.skip>false</ecat.japicmp.skip>
+        <!-- T-6-4 查③ db 约定块缺声明:T-5-6 契约落地前=警告(false);契约落地当窗翻 true 升红(片5 联动时序)。
+             子仓重声明本属性仅演练合法,生产升红只走本行(git 可审) -->
+        <ecat.lint.dbblock.strict>false</ecat.lint.dbblock.strict>
     </properties>
 
     <dependencyManagement>
@@ -274,6 +277,281 @@
                                     <version>[3.6.3,)</version>
                                 </requireMavenVersion>
                             </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- ECAT 自建 lint 三查执行件(T-6-4):validate 期文件树+文本扫描,零网络零构建依赖。
+                 载体=设计 §2.1 PoC 分叉后的 gmavenplus executeInline(实测 enforcer 3.6.3 EvaluateBeanshell
+                 为 <condition> 单表达式形态、bsh.Interpreter 裸构造无 project 绑定,字节码证据见 impl 报告;
+                 切换=载体替换,脚本逻辑/格式/白名单常量逐字平移,RED 契约由 gmavenplus 忽略返回值改抛异常表达)。
+                 ①flyway 裸 import 白名单 ②SQL 路径规范 ③db 约定块缺声明(strict 属性翻转升红)。
+                 RED=抛错构建失败([ERROR]+明细行);WARN=放行但明细可见;绿跑零输出零落盘。
+                 报告双通道:stdout+target/ecat-lint-report.txt。
+                 白名单内联各脚本常量区,增删必须走本仓 commit 留痕,子仓重声明整段插件才可改(篡改 git 可见)。
+                 第四查 requires_core 对齐(T-6-6)后续同位增 execution,序=④ -->
+            <plugin>
+                <groupId>org.codehaus.gmavenplus</groupId>
+                <artifactId>gmavenplus-plugin</artifactId>
+                <version>1.13.1</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.codehaus.groovy</groupId>
+                        <artifactId>groovy</artifactId>
+                        <version>3.0.21</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <id>ecat-lint-t6-4-1-flyway-import</id>
+                        <phase>validate</phase>
+                        <goals><goal>execute</goal></goals>
+                        <configuration>
+                            <scripts><script><![CDATA[/* T-6-4 查①:org.flywaydb 裸 import 白名单(D15 护栏①)。
+   场景与为什么:serial 仓 jSerialComm 被 22 仓直接 import 的先例证明「库放 trunk、
+   消费者裸 import」会把引擎演进锁死在全仓;flyway 走窄门面(片5 T-5-1),唯一合法方
+   =ecat-db-migration 仓,其余仓出现 import 即依赖面越界,构建期拦截。 */
+
+// ---- 白名单:每元素一个 artifactId,整仓豁免;增删必须走本仓 commit 留痕(理由+登记日期写行尾注释) ----
+whitelist = new String[] {
+    "integration-ecat-db-migration",  // D15 护栏①唯一合法方,随片5 T-5-1 实施登记(2026-10-04)
+};
+
+selfId = project.getArtifactId();
+for (def i = 0; i < whitelist.length; i = i + 1) {
+    if (whitelist[i].equals(selfId)) { return; }   // 白名单仓整查豁免
+}
+
+hits = new java.util.ArrayList();
+scanImports(new java.io.File(project.getBasedir(), "src/main/java"), hits);
+scanImports(new java.io.File(project.getBasedir(), "src/test/java"), hits);
+
+if (hits.isEmpty()) { return; }
+
+// ---- 输出:RED 明细+摘要,抛错判构建失败(gmavenplus 忽略脚本返回值,RED 契约=异常) ----
+lines = new java.util.ArrayList();
+for (def i = 0; i < hits.size(); i = i + 1) {
+    lines.add("[ECAT-LINT][T6-4-1][RED] " + selfId + " | " + hits.get(i)
+        + " | org.flywaydb 裸 import(D15 护栏①:唯一合法方=ecat-db-migration 窄门面仓;"
+        + "消费者一律走门面,修复=删 import 改调门面)");
+}
+emitReport(lines, "T6-4-1", hits.size(), 0);
+throw new Exception("[ECAT-LINT][T6-4-1] 构建判失败:白名单外 org.flywaydb 裸 import,明细见上方行与 target/ecat-lint-report.txt");
+
+// ---- 方法区(无类型方法签名;类名全限定) ----
+void scanImports(dir, out) {
+    if (dir == null || !dir.isDirectory()) { return; }
+    def children = dir.listFiles();
+    if (children == null) { return; }
+    for (def i = 0; i < children.length; i = i + 1) {
+        def f = children[i];
+        if (f.isDirectory()) { scanImports(f, out); }
+        else if (f.getName().endsWith(".java")) {
+            def br = null;
+            try {
+                br = new java.io.BufferedReader(new java.io.FileReader(f));
+                def line = br.readLine(); def ln = 0;
+                while (line != null) {
+                    ln = ln + 1;
+                    def t = line.trim();
+                    if (t.startsWith("import org.flywaydb.") || t.startsWith("import static org.flywaydb.")) {
+                        def rel = project.getBasedir().toPath().relativize(f.toPath()).toString().replace('\\', '/');
+                        out.add(rel + ":" + ln);
+                    }
+                    line = br.readLine();
+                }
+            } finally {
+                if (br != null) { try { br.close(); } catch (java.io.IOException e) { } }
+            }
+        }
+    }
+}
+
+void emitReport(lines, checkId, red, warn) {
+    for (def i = 0; i < lines.size(); i = i + 1) { System.out.println(lines.get(i)); }
+    def summary = "[ECAT-LINT][摘要] artifactId=" + project.getArtifactId() + " RED=" + red + " WARN=" + warn;
+    System.out.println(summary);
+    def w = null;
+    try {
+        def reportFile = new java.io.File(project.getBuild().getDirectory(), "ecat-lint-report.txt");
+        reportFile.getParentFile().mkdirs();   // validate 期 target/ 尚未物化(首跑实证),不建目录则 FileWriter 必炸
+        w = new java.io.BufferedWriter(new java.io.FileWriter(reportFile));
+        for (def j = 0; j < lines.size(); j = j + 1) { w.write(lines.get(j)); w.newLine(); }
+        w.write(summary); w.newLine();
+    } finally {
+        if (w != null) { try { w.close(); } catch (java.io.IOException e) { } }
+    }
+}]]></script></scripts>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>ecat-lint-t6-4-2-sql-path</id>
+                        <phase>validate</phase>
+                        <goals><goal>execute</goal></goals>
+                        <configuration>
+                            <scripts><script><![CDATA[/* T-6-4 查②:SQL 路径规范(D28 §0.5)。
+   场景与为什么:全仓 sql 一度散落(9 件域主旧 resources/sql+ruoyi/sql 9 件),
+   「哪份是真相源」无从回答;立法后唯一合法路径=db/migration-<domain>/,游离 sql
+   在构建期即红。白名单=T-5-8 清零前的过渡登记,清零时删空(只减不增)。 */
+
+// ---- 过渡白名单:每元素="<artifactId>|<仓内相对路径>" 双键(防同相对路径跨仓误放),
+//      行尾注释=理由+时限;增删走本仓 commit 留痕,只减不增 ----
+// T-5-8 清零已落地(2026-10-04 直读游离 sql=0),按「清零后删空」现为空集
+whitelist = new String[] {
+};
+
+selfId = project.getArtifactId();
+violations = new java.util.ArrayList();
+collectSql(project.getBasedir(), "", violations);
+
+lines = new java.util.ArrayList();
+for (def i = 0; i < violations.size(); i = i + 1) {
+    rel = (String) violations.get(i);
+    if (isLegalPath(rel)) { continue; }   // 合法路径不进违规表(先判法条,再判白名单;合法路径文件无需登记)
+    if (isWhitelisted(selfId, rel)) { continue; }
+    lines.add("[ECAT-LINT][T6-4-2][RED] " + selfId + " | " + rel
+        + " | SQL 游离于 db/migration-*/ 之外(D28 §0.5:唯一合法=src/main/resources/db/migration-<domain>/;"
+        + "修复=迁入对应域 migration 目录并走 T-5-8 对账纪律)");
+}
+if (lines.isEmpty()) { return; }
+emitReport(lines, "T6-4-2", lines.size(), 0);
+throw new Exception("[ECAT-LINT][T6-4-2] 构建判失败:白名单外 SQL 游离于 db/migration-*/ 之外,明细见上方行与 target/ecat-lint-report.txt");
+
+// ---- 方法区(无类型签名;类名全限定) ----
+void collectSql(dir, relPrefix, out) {
+    if (dir == null || !dir.isDirectory()) { return; }
+    def name = dir.getName();
+    if (name.equals("target") || name.equals("node_modules")) { return; }   // 构建产物与前端依赖树不扫
+    def children = dir.listFiles();
+    if (children == null) { return; }
+    for (def i = 0; i < children.length; i = i + 1) {
+        def f = children[i];
+        def rel = relPrefix.equals("") ? f.getName() : relPrefix + "/" + f.getName();
+        if (f.isDirectory()) { collectSql(f, rel, out); }
+        else if (f.getName().endsWith(".sql")) { out.add(rel); }
+    }
+}
+
+boolean isLegalPath(rel) {
+    def seg = rel.replace('\\', '/').split("/");
+    for (def i = 0; i + 1 < seg.length; i = i + 1) {
+        if (seg[i].equals("db") && seg[i + 1].startsWith("migration-") && seg[i + 1].length() > 10) { return true; }
+    }
+    return false;
+}
+
+boolean isWhitelisted(artifactId, rel) {
+    def key = artifactId + "|" + rel.replace('\\', '/');
+    for (def i = 0; i < whitelist.length; i = i + 1) {
+        if (whitelist[i].equals(key)) { return true; }
+    }
+    return false;
+}
+
+void emitReport(lines, checkId, red, warn) {
+    for (def i = 0; i < lines.size(); i = i + 1) { System.out.println(lines.get(i)); }
+    def summary = "[ECAT-LINT][摘要] artifactId=" + project.getArtifactId() + " RED=" + red + " WARN=" + warn;
+    System.out.println(summary);
+    def w = null;
+    try {
+        def reportFile = new java.io.File(project.getBuild().getDirectory(), "ecat-lint-report.txt");
+        reportFile.getParentFile().mkdirs();   // validate 期 target/ 尚未物化(首跑实证),不建目录则 FileWriter 必炸
+        w = new java.io.BufferedWriter(new java.io.FileWriter(reportFile));
+        for (def j = 0; j < lines.size(); j = j + 1) { w.write(lines.get(j)); w.newLine(); }
+        w.write(summary); w.newLine();
+    } finally {
+        if (w != null) { try { w.close(); } catch (java.io.IOException e) { } }
+    }
+}]]></script></scripts>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>ecat-lint-t6-4-3-db-block</id>
+                        <phase>validate</phase>
+                        <goals><goal>execute</goal></goals>
+                        <configuration>
+                            <scripts><script><![CDATA[/* T-6-4 查③:db 约定块缺声明(片5 T-5-6 联动)。
+   场景与为什么:db 约定块(T-5-6 契约,声明本仓持有哪些域的迁移账本)是升级链
+   dump 范围/建库单轨的机器可读依据;持有 mapper 或迁移目录的仓却不声明=账本悬空。
+   现值触发面仓全数声明完毕(T-5-6 存量补齐,2026-10-04 复核),当前常态=零输出;
+   strict 属性翻 true 后升红(生产翻转只走 parent 属性行,git 可审)。 */
+
+strict = "true".equals(project.getProperties().getProperty("ecat.lint.dbblock.strict", "false"));
+resDir = new java.io.File(project.getBasedir(), "src/main/resources");
+hasMapper = dirContainsXml(new java.io.File(resDir, "mapper"));
+hasMigration = dbDirHasMigration(new java.io.File(resDir, "db"));
+
+if (!hasMapper && !hasMigration) { return; }
+
+cfg = new java.io.File(resDir, "ecat-config.yml");
+hasDb = false;
+reason = "ecat-config.yml 文件缺失";
+if (cfg.isFile()) {
+    reason = "缺顶层 db: 块";
+    br = null;
+    try {
+        br = new java.io.BufferedReader(new java.io.FileReader(cfg));
+        line = br.readLine();
+        while (line != null) {
+            p = java.util.regex.Pattern.compile("^db\\s*:").matcher(line);
+            if (p.find()) { hasDb = true; break; }
+            line = br.readLine();
+        }
+    } finally {
+        if (br != null) { try { br.close(); } catch (java.io.IOException e) { } }
+    }
+}
+if (hasDb) { return; }
+
+sev = strict ? "RED" : "WARN";
+lines = new java.util.ArrayList();
+lines.add("[ECAT-LINT][T6-4-3][" + sev + "] " + project.getArtifactId()
+    + " | src/main/resources/ecat-config.yml | " + reason
+    + "(触发:持有 mapper=" + hasMapper + " / db/migration-*=" + hasMigration
+    + ";db 约定块契约=片5 T-5-6,契约落地前只警告" + (strict ? ",现已 strict 升红" : "")
+    + ";修复=按 T-5-6 契约补 db: 块)");
+emitReport(lines, "T6-4-3", strict ? 1 : 0, strict ? 0 : 1);
+if (strict) { throw new Exception("[ECAT-LINT][T6-4-3] 构建判失败:strict 模式下 db 约定块缺失,明细见上方行与 target/ecat-lint-report.txt"); }
+
+// ---- 方法区(无类型签名) ----
+boolean dirContainsXml(dir) {
+    if (dir == null || !dir.isDirectory()) { return false; }
+    def children = dir.listFiles();
+    if (children == null) { return false; }
+    for (def i = 0; i < children.length; i = i + 1) {
+        def f = children[i];
+        if (f.isDirectory()) { if (dirContainsXml(f)) { return true; } }
+        else if (f.getName().endsWith(".xml")) { return true; }
+    }
+    return false;
+}
+
+boolean dbDirHasMigration(dbDir) {
+    if (dbDir == null || !dbDir.isDirectory()) { return false; }
+    def children = dbDir.listFiles();
+    if (children == null) { return false; }
+    for (def i = 0; i < children.length; i = i + 1) {
+        def d = children[i];
+        if (d.isDirectory() && d.getName().startsWith("migration-") && d.getName().length() > 10) { return true; }
+    }
+    return false;
+}
+
+void emitReport(lines, checkId, red, warn) {
+    for (def i = 0; i < lines.size(); i = i + 1) { System.out.println(lines.get(i)); }
+    def summary = "[ECAT-LINT][摘要] artifactId=" + project.getArtifactId() + " RED=" + red + " WARN=" + warn;
+    System.out.println(summary);
+    def w = null;
+    try {
+        def reportFile = new java.io.File(project.getBuild().getDirectory(), "ecat-lint-report.txt");
+        reportFile.getParentFile().mkdirs();   // validate 期 target/ 尚未物化(首跑实证),不建目录则 FileWriter 必炸
+        w = new java.io.BufferedWriter(new java.io.FileWriter(reportFile));
+        for (def j = 0; j < lines.size(); j = j + 1) { w.write(lines.get(j)); w.newLine(); }
+        w.write(summary); w.newLine();
+    } finally {
+        if (w != null) { try { w.close(); } catch (java.io.IOException e) { } }
+    }
+}]]></script></scripts>
                         </configuration>
                     </execution>
                 </executions>
