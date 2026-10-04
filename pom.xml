@@ -411,6 +411,7 @@ void emitReport(lines, checkId, red, warn) {
 //      行尾注释=理由+时限;增删走本仓 commit 留痕,只减不增 ----
 // T-5-8 清零已落地(2026-10-04 直读游离 sql=0),按「清零后删空」现为空集
 whitelist = new String[] {
+    // 空:integration-ecat-db-migration 过渡条目已随片7 T-7-2 重刻落地移除(2026-10-04,pom ecat-core 3.1.0→4.0.0 与 requires_core ^4.0.0 两源同步,豁免条件消失)
 };
 
 selfId = project.getArtifactId();
@@ -583,7 +584,6 @@ selfId = project.getArtifactId();
 
 // ---- 过渡白名单:每元素一个 artifactId,整仓豁免;行尾注释=理由+清理条件,只减不增 ----
 whitelist = new String[] {
-    "integration-ecat-db-migration",  // T-5-1 新纪元仓:requires_core=^4.0.0(拍板)对 pom 现值 3.1.0 的片7 前过渡;片7 重刻落地后移除,只减不增(2026-10-04 lead 裁案A;运行时装载语义不变,core 3.x 仍恒红拒载)
 };
 for (def i = 0; i < whitelist.length; i = i + 1) {
     if (whitelist[i].equals(selfId)) { return; }   // 白名单仓整查豁免
