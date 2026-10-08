@@ -27,7 +27,12 @@
         <!-- japicmp skip 属性(门禁总开关,配置块见 pluginManagement):仅基线收集窗(全员 4.0.0 发布前,
              CLI 全量传递)与登记过的运维逃生合法;CLI -Decat.japicmp.skip=true 按次覆写不落盘,
              仓级 pom 永久覆写=豁免须登记 -->
-        <ecat.japicmp.skip>false</ecat.japicmp.skip>
+        <!-- 机制整备窗(2026-10-08 用户裁决暂停):门禁尚有两个未整备 case——①首发仓
+             (4.0 新建集成,发布史为空,世界上不存在可比基线,如 ecat-db-migration);
+             ②依赖可选面的类路径缺口(undertow 可选 ALPN 类,如 httpserver)。
+             两个 case 的集中方案(非逐仓自写)设计成熟前,总闸暂停执法;
+             恢复条件=首发豁免与类路径补件两方案定稿并评审通过。 -->
+        <ecat.japicmp.skip>true</ecat.japicmp.skip>
         <!-- T-6-4 查③ db 约定块缺声明:T-5-6 契约落地前=警告(false);契约落地当窗翻 true 升红(片5 联动时序)。
              子仓重声明本属性仅演练合法,生产升红只走本行(git 可审) -->
         <ecat.lint.dbblock.strict>false</ecat.lint.dbblock.strict>
