@@ -149,7 +149,10 @@
             <dependency>
                 <groupId>org.bytedeco</groupId>
                 <artifactId>javacpp</artifactId>
-                <version>1.5.13</version>
+                <!-- 须与 media 的 ffmpeg presets 后缀精确同版（6.1.1-1.5.10↔1.5.10），
+                     错版组合由官方 Loader 打 mismatch 警告，属不支持 ABI 组合；
+                     契约测试 BytedecoVersionAlignmentTest 锁定 -->
+                <version>1.5.10</version>
             </dependency>
             <!-- guava:冲突 artifact 在 ecat-core 树内(mapdb 传递 33.7.2-jre),pin=core 树值;
                  docker-java 树的 19.0 在扁平类加载层 core 恒先加载下为死重,固化运行时现实 -->
